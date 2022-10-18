@@ -17,7 +17,7 @@
 			{ 'max': 6, 'min': 0, 'tick': { 'b': 1, 's': 0.2 } },
 			{ 'max': 100, 'min': 0, 'tick': { 'b': 100, 's': 10 } }
 		];
-		let f = new Figure(c, [], 300, 300, 30, 30, axis);
+		let f = new Figure(c, 'main', [], 300, 300, 30, 30, axis);
 		f.drawSpine({'0': true, '1': true});
 		f.drawTickMarks(0, false);
 		f.drawTickMarkLabels(0);
@@ -31,6 +31,7 @@
 			y.push(4 + 2 * Math.sin(2 * x[i]));
 			i++;
 		};
+		f.setCursor({'axis': {'0': true, '1': true, '2': true}});
 		// x = [ 0.        ,  0.1010101 ,  0.2020202 ,  0.3030303 ,  0.4040404 ,
   //       0.50505051,  0.60606061,  0.70707071,  0.80808081,  0.90909091,
   //       1.01010101,  1.11111111,  1.21212121,  1.31313131,  1.41414141,

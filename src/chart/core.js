@@ -20,10 +20,32 @@ const Canvas = function (container_id, width=640, height=640, title=undefined) {
 	this._fontsize = 10;
 	this._fonttype = 'Arial';
 	this._ctx.font = this._fontsize + 'px ' + this._fonttype;
+	this._figures = {};
 	this.setSize(width, height);
 	if (title) {
 		this._title = title;
 	}
+	this._x_zero = 0;
+	this._y_zero = 0;
+	let self = this;
+	this._canvas.onmousemove = function (e) {
+        let rect = self._canvas.getBoundingClientRect();
+        let x = e.clientX - rect.left, y = e.clientY - rect.top;
+        let x_pos = x - self._x_zero, y_pos = y - self._y_zero;
+        // let x_real = Math.ceil(x_pos / self._scale_ratio), y_real = Math.ceil(y_pos / self._scale_ratio);
+        for (let figure_id in self._figures) {
+        	self._figures[figure_id].draw(x_pos, y_pos);
+        }
+        if (x_pos >= 0 && y_pos >= 0 && x_pos <= self._max_x && y_pos <= self._max_y) {
+            // label_x.innerHTML = "x: " + x_pos;
+            // label_y.innerHTML = "y: " + y_pos;
+            ;
+        } else {
+            // label_x.innerHTML = "x: ";
+            // label_y.innerHTML = "y: ";
+            ;
+        };
+    };
 };
 
 Canvas.prototype.setTitle = function (title, options={}) {
@@ -79,8 +101,12 @@ Canvas.prototype.setBrush = function (options) {
 	}
 };
 
-Canvas.prototype.clear = function () {
-    this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+Canvas.prototype.clear = function (bound=undefined) {
+	if (bound) {
+		this._ctx.clearRect(bound['left'] - 1, bound['top'] - 1, bound['right'] + 1, bound['bottom'] + 1);
+	} else {
+		this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+	}
 };
 
 Canvas.prototype.createMainFigure = function (x, y, width, height) {
@@ -148,7 +174,18 @@ Canvas.prototype.text = function (content, x, y, vertical=false, left=true, opt=
 	}
 };
 
-const Figure = function (canvas, data, width=600, height=600, x0=0, y0=0, axis=undefined) {
+Canvas.prototype.regist = function (figure_id, figure) {
+	if (figure_id in this._figures) {
+		;
+	} else {
+		this._figures[figure_id] = figure;
+	}
+};
+
+const Figure = function (canvas, figure_id, data, width=600, height=600, x0=0, y0=0, axis=undefined) {
+	let self = this;
+	this._id = figure_id;
+	canvas.regist(figure_id, self);
 	this._ctx = canvas.getContext();
 	this._canvas = canvas;
 	this._x0 = x0;
@@ -156,8 +193,18 @@ const Figure = function (canvas, data, width=600, height=600, x0=0, y0=0, axis=u
 	this._gap = 30;
 	this._width = width - 2 * this._gap;
 	this._height = height - 2 * this._gap;
-	// this._x_offset = x_offset;
-	// this._y_offset = y_offset;
+	this._bound = {
+		'left': x0,
+		'top': y0,
+		'right': x0 + width,
+		'bottom': y0 + height,
+	};
+	this._bound_visible = {
+		'left': x0 + this._gap,
+		'top': y0 + this._gap,
+		'right': x0 + width - this._gap,
+		'bottom': y0 + height - this._gap,
+	};
 	this._data = data;
 	this._axis = [
 		{ 'max': this._width, 'min': 0, 'tick': { 'b': 100, 's': 10 } },
@@ -170,12 +217,59 @@ const Figure = function (canvas, data, width=600, height=600, x0=0, y0=0, axis=u
 		}
 	}
 	this.reloadAxis();
+	this._spine_settins = {
+		'visible': false,
+		'color': 'black',
+		'weight': 1,
+		'settings': {'0': false, '1': false, '2': false, '3': false},
+	};
+	this._tickmark_settings = [
+		{'visible': false, 'outward': true, 'label': false, },
+		{'visible': false, 'outward': true, 'label': false, },
+		{'visible': false, 'outward': true, 'label': false, },
+	];
+	this._cursor_settings = {
+		'axis': [false, false, false],
+		'color': 'gray',
+		'bits': 2,
+	};
+};
+
+Figure.prototype.setCursor = function (opt) {
+	let options = JSON.parse(JSON.stringify(opt));
+	if ('axis' in options) {
+		if ('0' in options['axis']) {
+			this._cursor_settings['axis'][0] = options['axis']['0'];
+		}
+		if ('1' in options['axis']) {
+			this._cursor_settings['axis'][1] = options['axis']['1'];
+		}
+		if ('2' in options['axis']) {
+			this._cursor_settings['axis'][2] = options['axis']['2'];
+		}
+	}
+	if ('bits' in options) {
+		this._cursor_settings['bits'] = options['bits'];
+	}
+	if ('color' in options) {
+		this._cursor_settings['color'] = options['color'];
+	}
 };
 
 Figure.prototype.reloadAxis = function () {
 	this._axis[0]['ratio'] = this._width / (this._axis[0]['max'] - this._axis[0]['min']);
 	this._axis[1]['ratio'] = this._height / (this._axis[1]['max'] - this._axis[1]['min']);
 	this._axis[2]['ratio'] = this._height / (this._axis[2]['max'] - this._axis[2]['min']);
+};
+
+Figure.prototype.coordinateToPoint = function (x, y, coordinate=0) {
+	let x0 = (x - this._x0 - this._gap) / this._axis[0]['ratio'], y0 = 0;
+	if (coordinate == 0) {
+		y0 = (this._y0 + this._gap + this._height - y) / this._axis[1]['ratio'];
+	} else {
+		y0 = (this._y0 + this._gap + this._height - y) / this._axis[2]['ratio'];
+	}
+	return [x0, y0];
 };
 
 Figure.prototype.pointToCoordinate = function (x, y, mapping=false, coordinate=0) {
@@ -191,28 +285,48 @@ Figure.prototype.pointToCoordinate = function (x, y, mapping=false, coordinate=0
 	return [x0, y0];
 };
 
+Figure.prototype.setSpineBrush = function (opt) {
+	let options = JSON.parse(JSON.stringify(opt));
+	if ('visible' in options) {
+		this._spine_settins['visible'] = options['visible'];
+	}
+	if ('color' in options) {
+		this._spine_settins['color'] = options['color'];
+	}
+	if ('weight' in options) {
+		this._spine_settins['weight'] = options['weight'];
+	}
+};
+
 Figure.prototype.drawSpine = function (settings={'0': true, '1': true, '2': true, '3': true}) {
 	let [x0, y0] = this.pointToCoordinate(0, 0);
 	let [x1, y1] = this.pointToCoordinate(this._width, this._height);
+	if ((settings['0'] == true) || (settings['1'] == true) || (settings['2'] == true) || (settings['3'] == true)) {
+		this._canvas.setBrush(this._spine_settins)
+	}
 	if ('0' in settings) {
 		if (settings['0']) {
 			this._canvas.line(x0, y0, x1, y0);
 		}
+		this._spine_settins['settings']['0'] = settings['0'];
 	}
 	if ('1' in settings) {
 		if (settings['1']) {
 			this._canvas.line(x0, y1, x0, y0);
 		}
+		this._spine_settins['settings']['1'] = settings['1'];
 	}
 	if ('2' in settings) {
 		if (settings['2']) {
 			this._canvas.line(x1, y0, x1, y1);
 		}
+		this._spine_settins['settings']['2'] = settings['2'];
 	}
 	if ('3' in settings) {
 		if (settings['3']) {
 			this._canvas.line(x1, y1, x0, y1);
 		}
+		this._spine_settins['settings']['3'] = settings['3'];
 	}
 };
 
@@ -240,6 +354,8 @@ Figure.prototype.setAxis = function (axis, options, reload_axis=false) {
 
 Figure.prototype.drawTickMarks = function (axis, outward=true) {
 	if ((axis >= 0) && (axis <= 2)) {
+		this._tickmark_settings[axis]['visible'] = true;
+		this._tickmark_settings[axis]['outward'] = outward;
 		let interval = (this._axis[axis]['max'] - this._axis[axis]['min']) / this._axis[axis]['tick']['b'];
 		let interval_min = (this._axis[axis]['max'] - this._axis[axis]['min']) / this._axis[axis]['tick']['s'];
 		let direction = outward ? 1 : -1;
@@ -290,6 +406,7 @@ Figure.prototype.drawTickMarks = function (axis, outward=true) {
 
 Figure.prototype.drawTickMarkLabels = function (axis, bits=0) {
     if ((axis >= 0) && (axis <= 2)) {
+    	this._tickmark_settings[axis]['label'] = true;
 		let interval = (this._axis[axis]['max'] - this._axis[axis]['min']) / this._axis[axis]['tick']['b'];
 		if (axis == 0) {
 			let unit = this._width / interval;
@@ -402,4 +519,58 @@ Figure.prototype.bezierCurve = function (x, y, f=0.3, t=0.6, coordinate=0) {
         y_pre = y_cur;
     }
     this._ctx.stroke();
+};
+
+Figure.prototype.draw = function (x=undefined, y=undefined) {
+	this._canvas.clear(this._bound);
+	this.drawSpine(this._spine_settins['settings']);
+	for (let axis = 0; axis < 3; axis++) {
+		if (this._tickmark_settings[axis]['visible']) {
+			this.drawTickMarks(axis, this._tickmark_settings[axis]['outward']);
+		}
+		if (this._tickmark_settings[axis]['label']) {
+			this.drawTickMarkLabels(axis);
+		}
+	}
+	if ((x != undefined) && (y != undefined)) {
+		this.darwCursor(x, y);
+	}
+};
+
+Figure.prototype.isVisible = function (x, y) {
+	let x_flag = true, y_flag = true;
+	if ((x > this._bound_visible['right']) || (x < this._bound_visible['left'])) {
+		x_flag = false;
+	}
+	if ((y > this._bound_visible['bottom']) || (y < this._bound_visible['top'])) {
+		y_flag = false;
+	}
+	return [x_flag, y_flag];
+};
+
+Figure.prototype.darwCursor = function (x, y) {
+	this._canvas.setBrush({'color': this._cursor_settings['color'], 'weight': 1});
+	let bits = this._cursor_settings['bits'];
+	let [x_flag, y_flag] = this.isVisible(x, y), span = 15, label_span = -20;
+	if (x_flag) {
+		this._canvas.line(x, this._bound['top'] + span, x, this._bound['bottom'] - span);
+		if (this._cursor_settings['axis'][0]) {
+			let [x_label, y_label] = this.coordinateToPoint(x, y);
+			let [x_c, y_c] = this.pointToCoordinate(0, label_span);
+			this._canvas.text(x_label.toFixed(bits), x, y_c);
+		}
+	}
+	if (y_flag) {
+		this._canvas.line(this._bound['left'] + span, y, this._bound['right'] - span, y);
+		if (this._cursor_settings['axis'][1]) {
+			let [x_label, y_label] = this.coordinateToPoint(x, y);
+			let [x_c, y_c] = this.pointToCoordinate(1.5 * label_span, 0);
+			this._canvas.text(y_label.toFixed(bits), x_c, y);
+		}
+		if (this._cursor_settings['axis'][2]) {
+			let [x_label, y_label] = this.coordinateToPoint(x, y, 1);
+			let [x_c, y_c] = this.pointToCoordinate(this._width - label_span, 0);
+			this._canvas.text(y_label.toFixed(bits), x_c, y);
+		}
+	}
 };
