@@ -233,6 +233,10 @@ const Figure = function (canvas, figure_id, data, width=600, height=600, x0=0, y
 		'color': 'gray',
 		'bits': 2,
 	};
+	this._grid_settings = {
+		'axis': [false, false, false],
+		'color': 'gray',
+	};
 };
 
 Figure.prototype.setCursor = function (opt) {
@@ -256,6 +260,24 @@ Figure.prototype.setCursor = function (opt) {
 	}
 };
 
+Figure.prototype.setGrid = function (opt) {
+	let options = JSON.parse(JSON.stringify(opt));
+	if ('axis' in options) {
+		if ('0' in options['axis']) {
+			this._grid_settings['axis'][0] = options['axis']['0'];
+		}
+		if ('1' in options['axis']) {
+			this._grid_settings['axis'][1] = options['axis']['1'];
+		}
+		if ('2' in options['axis']) {
+			this._grid_settings['axis'][2] = options['axis']['2'];
+		}
+	}
+	if ('color' in options) {
+		this._grid_settings['color'] = options['color'];
+	}
+};
+
 Figure.prototype.reloadAxis = function () {
 	this._axis[0]['ratio'] = this._width / (this._axis[0]['max'] - this._axis[0]['min']);
 	this._axis[1]['ratio'] = this._height / (this._axis[1]['max'] - this._axis[1]['min']);
@@ -263,23 +285,23 @@ Figure.prototype.reloadAxis = function () {
 };
 
 Figure.prototype.coordinateToPoint = function (x, y, coordinate=0) {
-	let x0 = (x - this._x0 - this._gap) / this._axis[0]['ratio'], y0 = 0;
+	let x0 = (x - this._bound_visible['left']) / this._axis[0]['ratio'], y0 = 0;
 	if (coordinate == 0) {
-		y0 = (this._y0 + this._gap + this._height - y) / this._axis[1]['ratio'];
+		y0 = (this._bound_visible['top'] + this._height - y) / this._axis[1]['ratio'];
 	} else {
-		y0 = (this._y0 + this._gap + this._height - y) / this._axis[2]['ratio'];
+		y0 = (this._bound_visible['top'] + this._height - y) / this._axis[2]['ratio'];
 	}
 	return [x0, y0];
 };
 
 Figure.prototype.pointToCoordinate = function (x, y, mapping=false, coordinate=0) {
-	let x0 = this._x0 + this._gap + x, y0 = this._y0 + this._gap + this._height - y;
+	let x0 = this._bound_visible['left'] + x, y0 = this._bound_visible['top'] + this._height - y;
 	if (mapping) {
-		x0 = this._x0 + this._gap + this._axis[0]['ratio'] * x;
+		x0 = this._bound_visible['left'] + this._axis[0]['ratio'] * x;
 		if (coordinate == 0) {
-			y0 = this._y0 + this._gap + this._height - this._axis[1]['ratio'] * y;
+			y0 = this._bound_visible['top'] + this._height - this._axis[1]['ratio'] * y;
 		} else {
-			y0 = this._y0 + this._gap + this._height - this._axis[2]['ratio'] * y;
+			y0 = this._bound_visible['top'] + this._height - this._axis[2]['ratio'] * y;
 		}
 	}
 	return [x0, y0];
@@ -535,6 +557,8 @@ Figure.prototype.draw = function (x=undefined, y=undefined) {
 	if ((x != undefined) && (y != undefined)) {
 		this.darwCursor(x, y);
 	}
+	let [axis_0, axis_1, axis_2] = this._grid_settings['axis'];
+	this.drawGrid(axis_0, axis_1, axis_2);
 };
 
 Figure.prototype.isVisible = function (x, y) {
@@ -573,4 +597,36 @@ Figure.prototype.darwCursor = function (x, y) {
 			this._canvas.text(y_label.toFixed(bits), x_c, y);
 		}
 	}
+};
+
+Figure.prototype.drawGrid = function (axis_0=true, axis_1=false, axis_2=false) {
+	this._canvas.setBrush({'color': this._grid_settings['color'], 'weight': 1});
+	let alpha = this._ctx.globalAlpha;
+	this._ctx.globalAlpha = 0.1;
+	this._grid_settings['axis'] = [axis_0, axis_1, axis_2];
+	if (axis_0) {
+		let interval = (this._axis[0]['max'] - this._axis[0]['min']) / this._axis[0]['tick']['b'];
+		let unit = this._width / interval;
+		for (let i = 0; i <= interval; i++) {
+			let [x, y] = this.pointToCoordinate(i * unit, 0);
+	    	this._canvas.line(x, y, x, this._bound_visible['top']);
+		}
+	}
+	if (axis_1) {
+		let interval = (this._axis[1]['max'] - this._axis[1]['min']) / this._axis[1]['tick']['b'];
+		let unit = this._height / interval;
+		for (let i = 0; i <= interval; i++) {
+			let [x, y] = this.pointToCoordinate(0, i * unit);
+	    	this._canvas.line(x, y, this._bound_visible['right'], y);
+		}
+	}
+	if (axis_2) {
+		let interval = (this._axis[2]['max'] - this._axis[2]['min']) / this._axis[2]['tick']['b'];
+		let unit = Math.floor(this._height / interval);
+		for (let i = 0; i <= interval; i++) {
+			let [x, y] = this.pointToCoordinate(0, i * unit);
+			this._canvas.line(x, y, this._bound_visible['right'], y);
+		}
+	}
+	this._ctx.globalAlpha = alpha;
 };
