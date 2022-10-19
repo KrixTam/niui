@@ -22,8 +22,9 @@ const Canvas = function (container_id, width=640, height=640, title=undefined) {
 	this._ctx.font = this._fontsize + 'px ' + this._fonttype;
 	this._figures = {};
 	this.setSize(width, height);
+	this._title = undefined;
 	if (title) {
-		this._title = title;
+		this.setTitle(title);
 	}
 	this._x_zero = 0;
 	this._y_zero = 0;
@@ -36,15 +37,15 @@ const Canvas = function (container_id, width=640, height=640, title=undefined) {
         for (let figure_id in self._figures) {
         	self._figures[figure_id].draw(x_pos, y_pos);
         }
-        if (x_pos >= 0 && y_pos >= 0 && x_pos <= self._max_x && y_pos <= self._max_y) {
-            // label_x.innerHTML = "x: " + x_pos;
-            // label_y.innerHTML = "y: " + y_pos;
-            ;
-        } else {
-            // label_x.innerHTML = "x: ";
-            // label_y.innerHTML = "y: ";
-            ;
-        };
+        // if (x_pos >= 0 && y_pos >= 0 && x_pos <= self._max_x && y_pos <= self._max_y) {
+        //     // label_x.innerHTML = "x: " + x_pos;
+        //     // label_y.innerHTML = "y: " + y_pos;
+        //     ;
+        // } else {
+        //     // label_x.innerHTML = "x: ";
+        //     // label_y.innerHTML = "y: ";
+        //     ;
+        // };
     };
 };
 
@@ -182,7 +183,17 @@ Canvas.prototype.regist = function (figure_id, figure) {
 	}
 };
 
-const Figure = function (canvas, figure_id, data, width=600, height=600, x0=0, y0=0, axis=undefined) {
+Canvas.prototype.hide = function () {
+	this._container.style.display = 'none';
+	this._container.style.visibility = 'hidden';
+};
+
+Canvas.prototype.show = function () {
+	this._container.style.display = 'block';
+	this._container.style.visibility = 'visible';
+};
+
+const Figure = function (canvas, figure_id, data, width=600, height=600, x0=0, y0=0, axis=undefined, drawSomething=undefined) {
 	let self = this;
 	this._id = figure_id;
 	canvas.regist(figure_id, self);
@@ -194,16 +205,20 @@ const Figure = function (canvas, figure_id, data, width=600, height=600, x0=0, y
 	this._width = width - 2 * this._gap;
 	this._height = height - 2 * this._gap;
 	this._bound = {
-		'left': x0,
-		'top': y0,
-		'right': x0 + width,
-		'bottom': y0 + height,
+		left: x0,
+		top: y0,
+		right: x0 + width,
+		bottom: y0 + height,
 	};
 	this._bound_visible = {
-		'left': x0 + this._gap,
-		'top': y0 + this._gap,
-		'right': x0 + width - this._gap,
-		'bottom': y0 + height - this._gap,
+		left: x0 + this._gap,
+		top: y0 + this._gap,
+		right: x0 + width - this._gap,
+		bottom: y0 + height - this._gap,
+	};
+	this._center = {
+		x: (this._bound_visible.left + this._bound_visible.right) / 2,
+		y: (this._bound_visible.top + this._bound_visible.bottom) / 2,
 	};
 	this._data = data;
 	this._axis = [
@@ -211,6 +226,7 @@ const Figure = function (canvas, figure_id, data, width=600, height=600, x0=0, y
 		{ 'max': this._height, 'min': 0, 'tick': { 'b': 100, 's': 10 } },
 		{ 'max': this._height, 'min': 0, 'tick': { 'b': 100, 's': 10 } }
 	];
+	this.drawChart = drawSomething;
 	if (Array.isArray(axis)) {
 		for (let i = 0; i < axis.length; i++) {
 			this.setAxis(i, axis[i]);
@@ -237,6 +253,10 @@ const Figure = function (canvas, figure_id, data, width=600, height=600, x0=0, y
 		'axis': [false, false, false],
 		'color': 'gray',
 	};
+};
+
+Figure.prototype.setDrawChart = function (drawSomething) {
+	this.drawChart = drawSomething;
 };
 
 Figure.prototype.setCursor = function (opt) {
@@ -285,23 +305,23 @@ Figure.prototype.reloadAxis = function () {
 };
 
 Figure.prototype.coordinateToPoint = function (x, y, coordinate=0) {
-	let x0 = (x - this._bound_visible['left']) / this._axis[0]['ratio'], y0 = 0;
+	let x0 = (x - this._bound_visible.left) / this._axis[0]['ratio'], y0 = 0;
 	if (coordinate == 0) {
-		y0 = (this._bound_visible['top'] + this._height - y) / this._axis[1]['ratio'];
+		y0 = (this._bound_visible.top + this._height - y) / this._axis[1]['ratio'];
 	} else {
-		y0 = (this._bound_visible['top'] + this._height - y) / this._axis[2]['ratio'];
+		y0 = (this._bound_visible.top + this._height - y) / this._axis[2]['ratio'];
 	}
 	return [x0, y0];
 };
 
 Figure.prototype.pointToCoordinate = function (x, y, mapping=false, coordinate=0) {
-	let x0 = this._bound_visible['left'] + x, y0 = this._bound_visible['top'] + this._height - y;
+	let x0 = this._bound_visible.left + x, y0 = this._bound_visible.top + this._height - y;
 	if (mapping) {
-		x0 = this._bound_visible['left'] + this._axis[0]['ratio'] * x;
+		x0 = this._bound_visible.left + this._axis[0]['ratio'] * x;
 		if (coordinate == 0) {
-			y0 = this._bound_visible['top'] + this._height - this._axis[1]['ratio'] * y;
+			y0 = this._bound_visible.top + this._height - this._axis[1]['ratio'] * y;
 		} else {
-			y0 = this._bound_visible['top'] + this._height - this._axis[2]['ratio'] * y;
+			y0 = this._bound_visible.top + this._height - this._axis[2]['ratio'] * y;
 		}
 	}
 	return [x0, y0];
@@ -555,29 +575,33 @@ Figure.prototype.draw = function (x=undefined, y=undefined) {
 		}
 	}
 	if ((x != undefined) && (y != undefined)) {
-		this.darwCursor(x, y);
+		this.drawCursor(x, y);
 	}
 	let [axis_0, axis_1, axis_2] = this._grid_settings['axis'];
 	this.drawGrid(axis_0, axis_1, axis_2);
+	if (this.drawChart) {
+		let self = this;
+		this.drawChart(self);
+	}
 };
 
 Figure.prototype.isVisible = function (x, y) {
 	let x_flag = true, y_flag = true;
-	if ((x > this._bound_visible['right']) || (x < this._bound_visible['left'])) {
+	if ((x > this._bound_visible.right) || (x < this._bound_visible.left)) {
 		x_flag = false;
 	}
-	if ((y > this._bound_visible['bottom']) || (y < this._bound_visible['top'])) {
+	if ((y > this._bound_visible.bottom) || (y < this._bound_visible.top)) {
 		y_flag = false;
 	}
 	return [x_flag, y_flag];
 };
 
-Figure.prototype.darwCursor = function (x, y) {
+Figure.prototype.drawCursor = function (x, y) {
 	this._canvas.setBrush({'color': this._cursor_settings['color'], 'weight': 1});
 	let bits = this._cursor_settings['bits'];
 	let [x_flag, y_flag] = this.isVisible(x, y), span = 15, label_span = -20;
 	if (x_flag) {
-		this._canvas.line(x, this._bound['top'] + span, x, this._bound['bottom'] - span);
+		this._canvas.line(x, this._bound.top + span, x, this._bound.bottom - span);
 		if (this._cursor_settings['axis'][0]) {
 			let [x_label, y_label] = this.coordinateToPoint(x, y);
 			let [x_c, y_c] = this.pointToCoordinate(0, label_span);
@@ -585,7 +609,7 @@ Figure.prototype.darwCursor = function (x, y) {
 		}
 	}
 	if (y_flag) {
-		this._canvas.line(this._bound['left'] + span, y, this._bound['right'] - span, y);
+		this._canvas.line(this._bound.left + span, y, this._bound.right - span, y);
 		if (this._cursor_settings['axis'][1]) {
 			let [x_label, y_label] = this.coordinateToPoint(x, y);
 			let [x_c, y_c] = this.pointToCoordinate(1.5 * label_span, 0);
@@ -601,7 +625,7 @@ Figure.prototype.darwCursor = function (x, y) {
 
 Figure.prototype.drawGrid = function (axis_0=true, axis_1=false, axis_2=false) {
 	this._canvas.setBrush({'color': this._grid_settings['color'], 'weight': 1});
-	let alpha = this._ctx.globalAlpha;
+	this._ctx.save();
 	this._ctx.globalAlpha = 0.1;
 	this._grid_settings['axis'] = [axis_0, axis_1, axis_2];
 	if (axis_0) {
@@ -609,7 +633,7 @@ Figure.prototype.drawGrid = function (axis_0=true, axis_1=false, axis_2=false) {
 		let unit = this._width / interval;
 		for (let i = 0; i <= interval; i++) {
 			let [x, y] = this.pointToCoordinate(i * unit, 0);
-	    	this._canvas.line(x, y, x, this._bound_visible['top']);
+	    	this._canvas.line(x, y, x, this._bound_visible.top);
 		}
 	}
 	if (axis_1) {
@@ -617,7 +641,7 @@ Figure.prototype.drawGrid = function (axis_0=true, axis_1=false, axis_2=false) {
 		let unit = this._height / interval;
 		for (let i = 0; i <= interval; i++) {
 			let [x, y] = this.pointToCoordinate(0, i * unit);
-	    	this._canvas.line(x, y, this._bound_visible['right'], y);
+	    	this._canvas.line(x, y, this._bound_visible.right, y);
 		}
 	}
 	if (axis_2) {
@@ -625,8 +649,52 @@ Figure.prototype.drawGrid = function (axis_0=true, axis_1=false, axis_2=false) {
 		let unit = Math.floor(this._height / interval);
 		for (let i = 0; i <= interval; i++) {
 			let [x, y] = this.pointToCoordinate(0, i * unit);
-			this._canvas.line(x, y, this._bound_visible['right'], y);
+			this._canvas.line(x, y, this._bound_visible.right, y);
 		}
 	}
-	this._ctx.globalAlpha = alpha;
+	this._ctx.restore();
+};
+
+const Chart = {
+	pie: function (container_id, dataset, width=300, height=300, title=undefined, opt={'bits': 2}) {
+		let options = JSON.parse(JSON.stringify(opt)), title_gap = title ? 30 : 0;
+		let c = {
+			_canvas: new Canvas(container_id, width, height, title),
+			_figure: null,
+			show: () => {c._canvas.show();},
+			hide: () => {c._canvas.hide();},
+		};
+		let figure_id = 'pie_' + new Date().getTime();
+		c._figure = new Figure(c._canvas, figure_id, dataset, width, height - title_gap);
+		c._figure.setDrawChart((figure) => {
+			let labels = [], data = [], color = [];
+			for (let label in figure._data) {
+				labels.push(label);
+				data.push(figure._data[label].d);
+				color.push(figure._data[label].c);
+			}
+			let sum = data.reduce((a, b) => a + b, 0);
+			let percentages = data.map(e => e/sum);
+			let current_angle = 0;
+			let x = figure._center.x, y = figure._center.y;
+			figure._ctx.save();
+			figure._ctx.globalAlpha = 0.8;
+			figure._canvas.setBrush({'color': 'white', 'weight': 2});
+			let ratio = 0.9;
+			let r = figure._width >= figure._height ? figure._width * ratio / 2 : figure._height * ratio / 2;
+			for (let i = 0; i < percentages.length; i++) {
+		        let portion_angle = percentages[i] * 2 * Math.PI;
+		        figure._ctx.beginPath();
+		        figure._ctx.arc(x, y, r, current_angle, current_angle + portion_angle);
+		        current_angle += portion_angle;
+		        figure._ctx.lineTo(x, y);
+		        figure._ctx.fillStyle = color[i];
+		        figure._ctx.fill();
+		        figure._ctx.stroke();
+		    }
+		    figure._ctx.restore();
+		});
+		c._figure.draw();
+		return c;
+	},
 };

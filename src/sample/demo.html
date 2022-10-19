@@ -8,6 +8,7 @@
 </head>
 <body>
 	<div id="wrapper"></div>
+	<div id="pie"></div>
 	<script type="text/javascript">
 		let c = new Canvas('wrapper');
 		c.setTitle('测试一下标题');
@@ -87,6 +88,21 @@
 				}, 500);
 			}, 500);
 		}, 500);
+		let pie_dataset = {
+			'A': {
+				d: 123,
+				c: 'red',
+			},
+			'B': {
+				d: 45,
+				c: 'green',
+			},
+			'C': {
+				d: 88,
+				c: 'yellow',
+			},
+		};
+		let p = Chart.pie('pie', pie_dataset);
 	</script>
 </body>
 </html>
