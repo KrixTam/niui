@@ -655,6 +655,28 @@ Figure.prototype.drawGrid = function (axis_0=true, axis_1=false, axis_2=false) {
 	this._ctx.restore();
 };
 
+function generatePieData (dataset) {
+	let data = [], sum = 0;
+	for (let label in dataset) {
+		data.push({'label': label, 'data': dataset[label].d, 'color': dataset[label].c});
+		sum = sum + dataset[label].d;
+	}
+	data.sort((a, b) => {
+		if (a['data'] > b['data']) {
+			return -1;
+		}
+		if (a['data'] < b['data']) {
+			return 1;
+		}
+		return 0;
+	});
+	let percentages = data.map(e => e['data']/sum);
+	return {
+		'data': data,
+		'percentages': percentages,
+	};
+}
+
 const Chart = {
 	pie: function (container_id, dataset, width=300, height=300, title=undefined, opt={'bits': 2}) {
 		let options = JSON.parse(JSON.stringify(opt)), title_gap = title ? 30 : 0;
@@ -665,30 +687,22 @@ const Chart = {
 			hide: () => {c._canvas.hide();},
 		};
 		let figure_id = 'pie_' + new Date().getTime();
-		c._figure = new Figure(c._canvas, figure_id, dataset, width, height - title_gap);
+		c._figure = new Figure(c._canvas, figure_id, generatePieData(dataset), width, height - title_gap);
 		c._figure.setDrawChart((figure) => {
-			let labels = [], data = [], color = [];
-			for (let label in figure._data) {
-				labels.push(label);
-				data.push(figure._data[label].d);
-				color.push(figure._data[label].c);
-			}
-			let sum = data.reduce((a, b) => a + b, 0);
-			let percentages = data.map(e => e/sum);
-			let current_angle = 0;
+			let current_angle = 0 - Math.PI / 2;
 			let x = figure._center.x, y = figure._center.y;
 			figure._ctx.save();
 			figure._ctx.globalAlpha = 0.8;
 			figure._canvas.setBrush({'color': 'white', 'weight': 2});
 			let ratio = 0.9;
 			let r = figure._width >= figure._height ? figure._width * ratio / 2 : figure._height * ratio / 2;
-			for (let i = 0; i < percentages.length; i++) {
-		        let portion_angle = percentages[i] * 2 * Math.PI;
+			for (let i = 0; i < figure._data['percentages'].length; i++) {
+		        let portion_angle = figure._data['percentages'][i] * 2 * Math.PI;
 		        figure._ctx.beginPath();
 		        figure._ctx.arc(x, y, r, current_angle, current_angle + portion_angle);
 		        current_angle += portion_angle;
 		        figure._ctx.lineTo(x, y);
-		        figure._ctx.fillStyle = color[i];
+		        figure._ctx.fillStyle = figure._data['data'][i]['color'];
 		        figure._ctx.fill();
 		        figure._ctx.stroke();
 		    }
