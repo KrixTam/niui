@@ -12,17 +12,15 @@
 	<script type="text/javascript">
 		let c = new Canvas('wrapper');
 		c.setTitle('测试一下标题');
-		// let f = new Figure(c, [], 300, 300, 30, 30, [{}, {'tick': {'s': 20}}]);
 		let axis = [
 			{ 'max': 10, 'min': 0, 'tick': { 'b': 1, 's': 0.2 } },
 			{ 'max': 6, 'min': 0, 'tick': { 'b': 1, 's': 0.2 } },
 			{ 'max': 100, 'min': 0, 'tick': { 'b': 100, 's': 10 } }
 		];
-		let f = new Figure(c, 'main', [], 300, 300, 30, 30, axis);
+		let f = new Figure(c, 'main', [], 300, 300, 30, 30, false, axis);
 		f.drawSpine({'0': true, '1': true});
 		f.drawTickMarks(0, false);
 		f.drawTickMarkLabels(0);
-		// f.drawTickMarks(1);
 		f.drawTickMarkLabels(1);
 		let x = [];
 		let y = [];
@@ -91,18 +89,19 @@
 		let pie_dataset = {
 			'A': {
 				d: 123,
-				c: 'red',
+				c: '#ff4069',
 			},
 			'B': {
 				d: 45,
-				c: 'green',
+				c: '#ff9f40',
 			},
 			'C': {
 				d: 88,
-				c: 'yellow',
+				c: '#35a1ea',
 			},
 		};
-		let p = Chart.pie('pie', pie_dataset);
+		let p = Chart.pie('pie', pie_dataset, 300, 300, '饼图测试');
+		// let p = Chart.pie('pie', pie_dataset);
 	</script>
 </body>
 </html>
