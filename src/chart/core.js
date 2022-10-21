@@ -124,14 +124,39 @@ Canvas.prototype.getContext = function () {
 	return this._ctx;
 };
 
-Canvas.prototype.fillTextAtCenter = function (text, x, y, width) {
-	let text_width = this.getTextWidth(text);
-	let y_adj = y + this._fontsize;
-	if (width > text_width) {
-		let x_adj = x + Math.floor((width - text_width) / 2);
-		this._ctx.fillText(text, x_adj, y_adj);
+Canvas.prototype.fillTextAtCenter = function (text, x, y, width, vertical=false, left=true, opt={}) {
+	let options = JSON.parse(JSON.stringify(opt));
+	if ('weight' in options) {
+		;
 	} else {
-		this._ctx.fillText(text, x, y_adj);
+		options['weight'] = 1;
+	}
+	if ('font' in options) {
+		if ('size' in options['font']) {
+			;
+		} else {
+			options['font']['size'] = 10;
+		}
+	} else {
+		options['font'] = { 'size': 10 };
+	}
+	this.setBrush(options);
+	let text_width = this.getTextWidth(text);
+	if (vertical) {
+		let y_adj = y + Math.floor((width + options['font']['size']) / 2);
+		if (left) {
+			this._ctx.fillText(text, x - text_width, y_adj);	
+		} else {
+			this._ctx.fillText(text, x, y_adj);
+		}
+	} else {
+		let y_adj = y + options['font']['size'];
+		if (width > text_width) {
+			let x_adj = x + Math.floor((width - text_width) / 2);
+			this._ctx.fillText(text, x_adj, y_adj);
+		} else {
+			this._ctx.fillText(text, x, y_adj);
+		}
 	}
 };
 
@@ -176,7 +201,7 @@ Canvas.prototype.text = function (content, x, y, vertical=false, left=true, opt=
 			this._ctx.fillText(content, x, y - gap);
 		}
 	} else {
-		let y_adj = y + this._fontsize;
+		let y_adj = y + options['font']['size'];
 		this._ctx.fillText(content, x + gap, y_adj);
 	}
 	return text_width;
@@ -221,6 +246,7 @@ const Figure = function (canvas, figure_id, data, width=600, height=600, x0=0, y
 	this._gap = 30;
 	this.setSize(width, height);
 	this._data = data;
+	this._labels = {'0': [], '1': [], '2': []};
 	this._axis = [
 		{ 'max': this._width, 'min': 0, 'tick': { 'b': 100, 's': 10 } },
 		{ 'max': this._height, 'min': 0, 'tick': { 'b': 100, 's': 10 } },
@@ -253,6 +279,10 @@ const Figure = function (canvas, figure_id, data, width=600, height=600, x0=0, y
 	this._grid_settings = {
 		'axis': [false, false, false],
 		'color': 'gray',
+	};
+	this._label_settings = {
+		'axis': [false, false, false],
+		'color': 'black',
 	};
 };
 
@@ -361,7 +391,7 @@ Figure.prototype.setCursor = function (opt) {
 	}
 };
 
-Figure.prototype.setGrid = function (opt) {
+Figure.prototype.setGrid = function (opt, draw_flag=false) {
 	let options = JSON.parse(JSON.stringify(opt));
 	if ('axis' in options) {
 		if ('0' in options['axis']) {
@@ -376,6 +406,9 @@ Figure.prototype.setGrid = function (opt) {
 	}
 	if ('color' in options) {
 		this._grid_settings['color'] = options['color'];
+	}
+	if (draw_flag) {
+		this.draw();
 	}
 };
 
@@ -511,17 +544,70 @@ Figure.prototype.drawTickMarks = function (axis, outward=true) {
 			}
 		}
 		if (axis == 2) {
-			let unit = Math.floor(this._height / interval);
+			let unit = this._height / interval;
 			for (let i = 0; i <= interval; i++) {
 				let [x0, y0] = this.pointToCoordinate(this._width, i * unit);
 				let [x1, y1] = this.pointToCoordinate(this._width + 10 * direction, i * unit);
 		    	this._canvas.line(x0, y0, x1, y1);
 			}
-			unit = Math.floor(this._height / interval_min);
+			unit = this._height / interval_min;
 			for (let i = 0; i <= interval_min; i++) {
 				let [x0, y0] = this.pointToCoordinate(this._width, i * unit);
 				let [x1, y1] = this.pointToCoordinate(this._width + 5 * direction, i * unit);
 		    	this._canvas.line(x0, y0, x1, y1);
+			}
+		}
+	}
+};
+
+Figure.prototype.setLabels = function (axis, labels) {
+	let index = axis.toString();
+	if (index in this._labels) {
+		this._labels[index] = labels.map(e => e);
+	}
+};
+
+Figure.prototype.drawLabels = function (axis, labels_update=undefined) {
+    if ((axis >= 0) && (axis <= 2)) {
+    	this._label_settings['axis'][axis] = true;
+    	let index = axis.toString();
+    	if (labels_update) {
+    		this.setLabels(axis, labels_update);
+    	}
+		let interval = (this._axis[axis]['max'] - this._axis[axis]['min']) / this._axis[axis]['tick']['b'];
+		let begin_pos = 0, end_pos = 0;
+		let labels = this._labels[index];
+		if ((axis == 0) && (labels.length > 0)) {
+			let unit = this._width / interval;
+			for (let i = 0; i < interval; i++) {
+				begin_pos = i * unit;
+				end_pos = (i + 1) * unit;
+				let [x_cur, y_cur] = this.pointToCoordinate(begin_pos, -8);
+				let [x_nex, y_nex] = this.pointToCoordinate(end_pos, -8);
+				let uint_width = x_nex - x_cur;
+		    	this._canvas.fillTextAtCenter(labels[i], x_cur, y_cur, uint_width);
+			}
+		}
+		if ((axis == 1) && (labels.length > 0)) {
+			let unit = this._height / interval;
+			for (let i = 0; i < interval; i++) {
+				begin_pos = i * unit;
+				end_pos = (i + 1) * unit;
+				let [x_cur, y_cur] = this.pointToCoordinate(-8, begin_pos);
+				let [x_nex, y_nex] = this.pointToCoordinate(-8, end_pos);
+				let uint_width = y_nex - y_cur;
+		    	this._canvas.fillTextAtCenter(labels[i], x_cur, y_cur, uint_width, true);
+			}
+		}
+		if ((axis == 2) && (labels.length > 0)) {
+			let unit = this._height / interval;
+			for (let i = 0; i < interval; i++) {
+				begin_pos = i * unit;
+				end_pos = (i + 1) * unit;
+				let [x_cur, y_cur] = this.pointToCoordinate(this._width + 8, begin_pos);
+				let [x_nex, y_nex] = this.pointToCoordinate(this._width + 8, end_pos);
+				let uint_width = y_nex - y_cur;
+		    	this._canvas.fillTextAtCenter(labels[i], x_cur, y_cur, uint_width, true, false);
 			}
 		}
 	}
@@ -654,6 +740,7 @@ Figure.prototype.draw = function (x=undefined, y=undefined) {
 		if (this._tickmark_settings[axis]['label']) {
 			this.drawTickMarkLabels(axis);
 		}
+		this.drawLabels(axis);
 	}
 	let [axis_0, axis_1, axis_2] = this._grid_settings['axis'];
 	this.drawGrid(axis_0, axis_1, axis_2);
@@ -832,7 +919,23 @@ function getR(width, height, span, ratio=0.8) {
 };
 
 const Chart = {
+	id: function (chart_type) {
+		return chart_type + '_' + new Date().getTime();
+	},
 	basic: {
+		bar: function (container_id, dataset, width=300, height=300, title=undefined, opt={'bits': 2}) {
+			let options = JSON.parse(JSON.stringify(opt)), title_gap = title ? 30 : 0;
+			let c = {
+				_canvas: new Canvas(container_id, width, height, title),
+				_figure: null,
+				show: () => {c._canvas.show();},
+				hide: () => {c._canvas.hide();},
+			};
+			c._figure.draw();
+			return c;
+		},
+	},
+	stat: {
 		pie: function (container_id, dataset, width=300, height=300, title=undefined, opt={'bits': 2}) {
 			let options = JSON.parse(JSON.stringify(opt)), title_gap = title ? 30 : 0;
 			let c = {
@@ -853,7 +956,7 @@ const Chart = {
 					c._figure.draw();
 				},
 			};
-			let figure_id = 'pie_' + new Date().getTime();
+			let figure_id = Chart.id('pie');
 			c._figure = new Figure(c._canvas, figure_id, generatePieData(dataset), width, height - title_gap, 0, title_gap, true);
 			c._figure.setCursor({'visible': false});
 			c._figure._r = getR(c._figure._width, c._figure._height, c._canvas.getTextWidth('111.11%') - c._figure._gap / 2);
