@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<script type="text/javascript" src="../chart/core.js"></script>
+	<title>样例</title>
+</head>
+<body>
+	<div id="pie"></div>
+	<script type="text/javascript">
+		let pie_dataset = {
+			'A': {
+				d: 123,
+				c: '#ff4069',
+			},
+			'B': {
+				d: 45,
+				c: '#ff9f40',
+			},
+			'C': {
+				d: 88,
+				c: '#35a1ea',
+			},
+		};
+		let pie_dataset_02 = {
+			'AGG': {
+				d: 123,
+				c: '#ff4069',
+			},
+			'A@B': {
+				d: 415,
+				c: '#ff9f40',
+			},
+			'901C': {
+				d: 188,
+				c: '#35a1ea',
+			},
+		};
+		let p = Chart.basic.pie('pie', pie_dataset, 300, 300, '饼图测试');
+		setTimeout(() => {
+			p.update({
+				'width': 400,
+				'height': 500,
+				'title': undefined,
+				'data': pie_dataset_02,
+			});
+		}, 1000);
+	</script>
+</body>
+</html>

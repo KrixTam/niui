@@ -39,6 +39,22 @@ const Canvas = function (container_id, width=640, height=640, title=undefined) {
     };
 };
 
+Canvas.prototype.getTextWidth = function (content, fontsize=10, fonttype='Arial') {
+	this._ctx.font = fontsize + 'px ' + fonttype;
+	let result = this._ctx.measureText(content).width;
+	this._ctx.font = this._fontsize + 'px ' + this._fonttype;
+	return result;
+};
+
+Canvas.prototype.update = function (settings) {
+	let new_width = 'width' in settings ? settings['width'] : this._max_x;
+	let new_height = 'height' in settings ? settings['height'] : this._max_y;
+	this.setSize(new_width, new_height);
+	if ('title' in settings) {
+		this.setTitle(settings['title']);
+	}
+};
+
 Canvas.prototype.setTitle = function (title, options={}) {
 	if ('font' in options) {
 		if ('size' in options['font']) {
@@ -109,7 +125,7 @@ Canvas.prototype.getContext = function () {
 };
 
 Canvas.prototype.fillTextAtCenter = function (text, x, y, width) {
-	let text_width = this._ctx.measureText(text).width;
+	let text_width = this.getTextWidth(text);
 	let y_adj = y + this._fontsize;
 	if (width > text_width) {
 		let x_adj = x + Math.floor((width - text_width) / 2);
@@ -152,7 +168,7 @@ Canvas.prototype.text = function (content, x, y, vertical=false, left=true, opt=
 		options['font'] = { 'size': 10 };
 	}
 	this.setBrush(options);
-	let text_width = this._ctx.measureText(content).width;
+	let text_width = this.getTextWidth(content);
 	if (vertical) {
 		if (left) {
 			this._ctx.fillText(content, x - text_width, y - gap);	
@@ -201,29 +217,9 @@ const Figure = function (canvas, figure_id, data, width=600, height=600, x0=0, y
 	canvas.regist(figure_id, self);
 	this._ctx = canvas.getContext();
 	this._canvas = canvas;
-	// this._x0 = legend ? x0 + this._legend_settings['gap'] : x0;
-	// this._y0 = legend ? y0 + this._legend_settings['gap'] + this._legend_settings['fontsize'] : y0;
-	this._x0 = x0;
-	this._y0 = y0;
+	this.setOrigin(x0, y0);
 	this._gap = 30;
-	this._width = width - 2 * this._gap;
-	this._height = height - 2 * this._gap;
-	this._bound = {
-		left: this._x0,
-		top: this._y0,
-		right: this._x0 + width,
-		bottom: this._y0 + height,
-	};
-	this._bound_visible = {
-		left: this._x0 + this._gap,
-		top: this._y0 + this._gap,
-		right: this._x0 + width - this._gap,
-		bottom: this._y0 + height - this._gap,
-	};
-	this._center = {
-		x: (this._bound_visible.left + this._bound_visible.right) / 2,
-		y: (this._bound_visible.top + this._bound_visible.bottom) / 2,
-	};
+	this.setSize(width, height);
 	this._data = data;
 	this._axis = [
 		{ 'max': this._width, 'min': 0, 'tick': { 'b': 100, 's': 10 } },
@@ -258,6 +254,55 @@ const Figure = function (canvas, figure_id, data, width=600, height=600, x0=0, y
 		'axis': [false, false, false],
 		'color': 'gray',
 	};
+};
+
+Figure.prototype.setOrigin = function (x0, y0) {
+	this._x0 = x0;
+	this._y0 = y0;
+};
+
+Figure.prototype.getVisibleOrigin = function () {
+	let point = JSON.parse(JSON.stringify(this._center));
+	if (this._width >= this.height) {
+		return point;
+	} else {
+		point.y = point.x;
+		return point;
+	}
+};
+
+Figure.prototype.setSize = function (width, height) {
+	this._width = width - 2 * this._gap;
+	this._height = height - 2 * this._gap;
+	this._bound = {
+		left: this._x0,
+		top: this._y0,
+		right: this._x0 + width,
+		bottom: this._y0 + height,
+	};
+	this._bound_visible = {
+		left: this._x0 + this._gap,
+		top: this._y0 + this._gap,
+		right: this._x0 + width - this._gap,
+		bottom: this._y0 + height - this._gap,
+	};
+	this._center = {
+		x: (this._bound_visible.left + this._bound_visible.right) / 2,
+		y: (this._bound_visible.top + this._bound_visible.bottom) / 2,
+	};
+};
+
+Figure.prototype.update = function (settings) {
+	let x0 = 'x' in settings ? settings['x'] : this._x0;
+	let y0 = 'y' in settings ? settings['y'] : this._y0;
+	this.setOrigin(x0, y0);
+	let new_width = 'width' in settings ? settings['width'] : this._width + 2 * this._gap;
+	let new_height = 'height' in settings ? settings['height'] : this._height + 2 * this._gap;
+	this.setSize(new_width, new_height);
+	if ('data' in settings) {
+		this._data = settings['data'];
+		this._elements = [];
+	}
 };
 
 Figure.prototype.addElement = function (e) {
@@ -610,9 +655,6 @@ Figure.prototype.draw = function (x=undefined, y=undefined) {
 			this.drawTickMarkLabels(axis);
 		}
 	}
-	if ((x != undefined) && (y != undefined)) {
-		this.drawCursor(x, y);
-	}
 	let [axis_0, axis_1, axis_2] = this._grid_settings['axis'];
 	this.drawGrid(axis_0, axis_1, axis_2);
 	if (this.drawChart) {
@@ -620,8 +662,11 @@ Figure.prototype.draw = function (x=undefined, y=undefined) {
 		this.drawChart(self);
 	}
 	// console.log(x + ' , ' + y);
-	for (let i = 0; i < this._elements.length; i++) {
-		this._elements[i].updateLegend(x, y);
+	if ((x != undefined) && (y != undefined)) {
+		this.drawCursor(x, y);
+		for (let i = 0; i < this._elements.length; i++) {
+			this._elements[i].updateLegend(x, y);
+		}
 	}
 };
 
@@ -780,56 +825,76 @@ PieChartFragment.prototype.updateLegend = function (x, y) {
 	}
 };
 
+function getR(width, height, span, ratio=0.8) {
+	let r = width >= height ? width / 2 : height / 2;
+	r = (r - span) * ratio;
+	return r;
+};
+
 const Chart = {
-	pie: function (container_id, dataset, width=300, height=300, title=undefined, opt={'bits': 2}) {
-		let options = JSON.parse(JSON.stringify(opt)), title_gap = title ? 30 : 0;
-		let c = {
-			_canvas: new Canvas(container_id, width, height, title),
-			_figure: null,
-			show: () => {c._canvas.show();},
-			hide: () => {c._canvas.hide();},
-		};
-		let figure_id = 'pie_' + new Date().getTime();
-		c._figure = new Figure(c._canvas, figure_id, generatePieData(dataset), width, height - title_gap, 0, title_gap, true);
-		c._figure.setCursor({'visible': false});
-		c._figure.setDrawChart((figure) => {
-			let current_angle = 0 - Math.PI / 2, portion_angle = 0, next_angle = 0;
-			let init_element_flag = figure._elements.length > 0 ? false : true;
-			let x = figure._center.x, y = figure._center.y;
-			let ratio = 0.8;
-			let r = figure._width >= figure._height ? figure._width * ratio / 2 : figure._height * ratio / 2;
-			let legend_x = figure._gap, legend_y = figure._y0 + figure._legend_settings['gap'];
-			figure._canvas.setBrush({'font': figure._legend_settings['font']});
-			let legend_bits = figure._legend_settings['bits'];
-			for (let i = 0; i < figure._data['percentages'].length; i++) {
-				figure._ctx.beginPath();
-				if (init_element_flag) {
-			        portion_angle = figure._data['percentages'][i] * 2 * Math.PI;
-			        next_angle = current_angle + portion_angle;
-			        figure.addElement(new PieChartFragment(x, y, r, current_angle * 180 / Math.PI, next_angle * 180 / Math.PI, figure._data['data'][i]['label'], figure._data['data'][i]['data'], legend_bits));
-			    } else {
-			    	next_angle = figure._elements[i]._end_angel * Math.PI / 180;
+	basic: {
+		pie: function (container_id, dataset, width=300, height=300, title=undefined, opt={'bits': 2}) {
+			let options = JSON.parse(JSON.stringify(opt)), title_gap = title ? 30 : 0;
+			let c = {
+				_canvas: new Canvas(container_id, width, height, title),
+				_figure: null,
+				show: () => {c._canvas.show();},
+				hide: () => {c._canvas.hide();},
+				update: (settings) => {
+					let options = JSON.parse(JSON.stringify(settings));
+					c._canvas.update(options);
+					if ('data' in options) {
+						options['data'] = generatePieData(options['data']);
+					}
+					options['x'] = 0;
+					options['y'] = (('title' in options) && (options['title'] != undefined)) ? 30 : 0;
+					c._figure.update(options);
+					c._figure._r = getR(c._figure._width, c._figure._height, c._canvas.getTextWidth('111.11%') - c._figure._gap / 2);
+					c._figure.draw();
+				},
+			};
+			let figure_id = 'pie_' + new Date().getTime();
+			c._figure = new Figure(c._canvas, figure_id, generatePieData(dataset), width, height - title_gap, 0, title_gap, true);
+			c._figure.setCursor({'visible': false});
+			c._figure._r = getR(c._figure._width, c._figure._height, c._canvas.getTextWidth('111.11%') - c._figure._gap / 2);
+			c._figure.setDrawChart((figure) => {
+				let current_angle = 0 - Math.PI / 2, portion_angle = 0, next_angle = 0;
+				let init_element_flag = figure._elements.length > 0 ? false : true;
+				let origin = figure.getVisibleOrigin();
+				let x = origin.x, y = origin.y;
+				let legend_x = figure._gap, legend_y = figure._y0 + figure._legend_settings['gap'];
+				figure._canvas.setBrush({'font': figure._legend_settings['font']});
+				let legend_bits = figure._legend_settings['bits'];
+				for (let i = 0; i < figure._data['percentages'].length; i++) {
+					figure._ctx.beginPath();
+					if (init_element_flag) {
+				        portion_angle = figure._data['percentages'][i] * 2 * Math.PI;
+				        next_angle = current_angle + portion_angle;
+				        figure.addElement(new PieChartFragment(x, y, figure._r, current_angle * 180 / Math.PI, next_angle * 180 / Math.PI, figure._data['data'][i]['label'], figure._data['data'][i]['data'], legend_bits));
+				    } else {
+				    	next_angle = figure._elements[i]._end_angel * Math.PI / 180;
+				    }
+				    let label_x = Math.round(Math.cos((next_angle + current_angle) / 2) * (figure._r + 5));
+			        let label_y = Math.round(Math.sin((next_angle + current_angle) / 2) * (figure._r + 5));
+			        let percent = (figure._data['percentages'][i]*100).toFixed(legend_bits) + '%';
+			        label_x = label_x > 0 ? label_x + x : label_x + x - figure._canvas.getTextWidth(percent) ;
+			        label_y = label_x > 0 ? label_y + y - figure._canvas._fontsize: label_y + y;
+				    figure._ctx.arc(x, y, figure._r, current_angle, next_angle);
+			        figure._ctx.lineTo(x, y);
+			        figure._ctx.closePath();
+			        current_angle = next_angle;
+			        let legend_color = figure._data['data'][i]['color'];
+			        figure._ctx.fillStyle = changeLuminance(legend_color);
+			        figure._ctx.fill();
+			        figure._canvas.text(percent, label_x, label_y, false, true, {'color': 'black'});
+			        figure._canvas.setBrush({'color': '#fff', 'weight': 2});
+			        figure._ctx.stroke();
+			        let text_width = figure._canvas.text(figure._elements[i].legend, legend_x, legend_y, false, true, {'color': legend_color});
+			        legend_x = legend_x + text_width + figure._legend_settings['span'];
 			    }
-			    let label_x = Math.round(Math.cos((next_angle + current_angle) / 2) * (r + 5));
-		        let label_y = Math.round(Math.sin((next_angle + current_angle) / 2) * (r + 5));
-		        let percent = (figure._data['percentages'][i]*100).toFixed(legend_bits) + '%';
-		        label_x = label_x > 0 ? label_x + x : label_x + x - figure._ctx.measureText(percent).width ;
-		        label_y = label_x > 0 ? label_y + y - figure._canvas._fontsize: label_y + y;
-			    figure._ctx.arc(x, y, r, current_angle, next_angle);
-		        figure._ctx.lineTo(x, y);
-		        figure._ctx.closePath();
-		        current_angle = next_angle;
-		        let legend_color = figure._data['data'][i]['color'];
-		        figure._ctx.fillStyle = changeLuminance(legend_color);
-		        figure._ctx.fill();
-		        figure._canvas.text(percent, label_x, label_y, false, true, {'color': 'black'});
-		        figure._canvas.setBrush({'color': '#fff', 'weight': 2});
-		        figure._ctx.stroke();
-		        let text_width = figure._canvas.text(figure._elements[i].legend, legend_x, legend_y, false, true, {'color': legend_color});
-		        legend_x = legend_x + text_width + figure._legend_settings['span'];
-		    }
-		});
-		c._figure.draw();
-		return c;
-	},
+			});
+			c._figure.draw();
+			return c;
+		},
+	}
 };

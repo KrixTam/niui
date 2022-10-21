@@ -4,11 +4,10 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<script type="text/javascript" src="../chart/core.js"></script>
-	<title>样例</title>
+	<title>基础测试</title>
 </head>
 <body>
 	<div id="wrapper"></div>
-	<div id="pie"></div>
 	<script type="text/javascript">
 		let c = new Canvas('wrapper');
 		c.setTitle('测试一下标题');
@@ -86,22 +85,6 @@
 				}, 500);
 			}, 500);
 		}, 500);
-		let pie_dataset = {
-			'A': {
-				d: 123,
-				c: '#ff4069',
-			},
-			'B': {
-				d: 45,
-				c: '#ff9f40',
-			},
-			'C': {
-				d: 88,
-				c: '#35a1ea',
-			},
-		};
-		let p = Chart.pie('pie', pie_dataset, 300, 300, '饼图测试');
-		// let p = Chart.pie('pie', pie_dataset);
 	</script>
 </body>
 </html>
