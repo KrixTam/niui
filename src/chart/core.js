@@ -454,7 +454,25 @@ Figure.prototype.setSpineBrush = function (opt) {
 	}
 };
 
-Figure.prototype.drawSpine = function (settings={'0': true, '1': true, '2': true, '3': true}) {
+Figure.prototype.drawSpine = function () {
+	let settings = {};
+	if (arguments.length == 0) {
+		settings = {'0': true, '1': true, '2': true, '3': true};
+	}
+	if (arguments.length == 1) {
+		settings = arguments[0];
+	}
+	if (arguments.length == 2) {
+		if (arguments[0] == 0) {
+			settings['0'] = arguments[1];
+		}
+		if (arguments[0] == 1) {
+			settings['1'] = arguments[1];
+		}
+		if (arguments[0] == 2) {
+			settings['2'] = arguments[1];
+		}
+	}
 	let [x0, y0] = this.pointToCoordinate(0, 0);
 	let [x1, y1] = this.pointToCoordinate(this._width, this._height);
 	if ((settings['0'] == true) || (settings['1'] == true) || (settings['2'] == true) || (settings['3'] == true)) {
@@ -565,6 +583,11 @@ Figure.prototype.setLabels = function (axis, labels) {
 	if (index in this._labels) {
 		this._labels[index] = labels.map(e => e);
 	}
+};
+
+Figure.prototype.resetLabels = function (axis, labels) {
+	this._labels = {'0': [], '1': [], '2': []};
+	this.setLabels(axis, labels);
 };
 
 Figure.prototype.drawLabels = function (axis, labels_update=undefined) {
@@ -851,6 +874,45 @@ function generatePieData (dataset) {
 	};
 };
 
+function generateBarData (dataset) {
+	let data = [], index = dataset.label.map(e => e);
+	for (let i = 0; i < index.length; i++) {
+		data.push(dataset.series.map((e) => {
+			for (let key in e) {
+				let obj = {
+					'label': key,
+					'data':  e[key].d[i],
+					'color': e[key].c,
+				};
+				return obj;
+			}
+		}));
+	}
+	let max = dataset.series.map((e) => {
+		for (let key in e) {
+			return Math.max(...e[key].d);
+		}
+	});
+	max = Math.max(...max);
+	let min = dataset.series.map((e) => {
+		for (let key in e) {
+			return Math.min(...e[key].d);
+		}
+	});
+	min = Math.min(...min);
+	let axis = 'axis' in dataset ? dataset['axis'] : 0;
+	let span = 'span' in dataset ? dataset['span'] : 10;
+	return {
+		'data': data,
+		'index': index,
+		'series': dataset.series.length,
+		'max': max > 0 ? max : 0,
+		'min': min > 0 ? 0 : min,
+		'axis': axis,
+		'span': span,
+	}
+};
+
 function changeLuminance (color, luminance=0.2) {
 	let rgb = String(color).replace(/[^0-9a-f]/gi, '');
 	if (rgb.length < 6) {
@@ -912,6 +974,38 @@ PieChartFragment.prototype.updateLegend = function (x, y) {
 	}
 };
 
+// PieChartFragment.prototype.drawLegend = function (x, y) {
+
+// };
+
+const BarChartFragment = function (bound, data, bits) {
+	this._label = [];
+	for (let i = 0; i < data.length; i++) {
+		this._label.push(data[i].label);
+	}
+	this._data = data;
+	this._bits = bits;
+	this._bound = bound;
+	this.legend = label;
+};
+
+BarChartFragment.prototype.isInside = function (x, y) {
+	let flag = true;
+	let x_flag = true, y_flag = true;
+	if ((x > this._bound.right) || (x < this._bound.left) || (y > this._bound.bottom) || (y < this._bound.top)) {
+		flag = false;
+	}
+	return flag;
+};
+
+BarChartFragment.prototype.updateLegend = function (x, y) {
+	if (this.isInside(x, y)) {
+		this.legend = this._label + ': ' + this._data.toFixed(this._bits);
+	} else {
+		this.legend = this._label;
+	}
+};
+
 function getR(width, height, span, ratio=0.8) {
 	let r = width >= height ? width / 2 : height / 2;
 	r = (r - span) * ratio;
@@ -929,6 +1023,7 @@ function createChart (chart_type, container_id, dataset, width, height, title, o
 	};
 	let figure_id = Chart.id(chart_type);
 	c._figure = new Figure(c._canvas, figure_id, dataset, width, height - title_gap, 0, title_gap, true);
+	c._figure.setLegend(options);
 	init_fn(c);
 	c._figure.draw();
 	return c;
@@ -940,63 +1035,145 @@ const Chart = {
 	},
 	basic: {
 		bar: function (container_id, dataset, width=300, height=300, title=undefined, opt={'bits': 2}) {
-			let c = createChart('pie', container_id, generatePieData(dataset), width, height, title, opt, (settings) => {}, (chart) => {});
+			let c = createChart('bar', container_id, generateBarData(dataset), width, height, title, opt, (settings) => {
+				let options = JSON.parse(JSON.stringify(settings));
+				c._canvas.update(options);
+				if ('data' in options) {
+					options['data'] = generateBarData(options['data']);
+				}
+				options['x'] = 0;
+				options['y'] = (('title' in options) && (options['title'] != undefined)) ? 30 : 0;
+				c._figure.update(options);
+				c._figure.draw();
+			}, (chart) => {
+				chart._figure.setCursor({'visible': false});
+				chart._figure.setDrawChart((figure) => {
+					let init_element_flag = figure._elements.length > 0 ? false : true;
+					if (init_element_flag) {
+						let axis = figure._data.axis;
+						figure.setAxis(axis, { 'max': figure._elements.length, 'min': 0, 'tick': { 'b': 1, 's': 1 } }, true);
+						let b = figure._data.max > 0 ? Math.floor(figure._data.max / 10) :  Math.floor(- figure._data.min / 10);
+						let max = figure._data.max > 0 ? Math.ceil(figure._data.max * 1.1) : b;
+						let min = figure._data.min >= 0 ? 0 : figure._data.min;
+						figure.drawSpine({'0': false, '1': false, '2': false, '3': false});
+						figure.drawSpine(axis, true);
+						if (axis == 0) {
+							figure.setAxis(1, { 'max': max, 'min': min, 'tick': { 'b': b, 's': b } }, true);
+							figure.drawSpine(1, true);
+							figure.drawTickMarks(1);
+							figure.drawTickMarkLabels(1);
+						} else {
+							figure.setAxis(0, { 'max': max, 'min': min, 'tick': { 'b': b, 's': b } }, true);
+							figure.drawSpine(0, true);
+							figure.drawTickMarks(0);
+							figure.drawTickMarkLabels(0);
+						}
+						figure.reloadAxis();
+						figure.resetLabels(axis, figure._data.index);
+						figure.drawLabels(axis);
+						let interval = (figure._axis[axis]['max'] - figure._axis[axis]['min']) / figure._axis[axis]['tick']['b'];
+						let begin_pos = 0, end_pos = 0;
+						let legend_bits = figure._legend_settings['bits'];
+						if (axis == 0) {
+							let unit = this._width / interval;
+							figure._element_width = unit;
+							for (let i = 0; i < interval; i++) {
+								begin_pos = i * unit;
+								end_pos = (i + 1) * unit;
+								let [left, y_0] = this.pointToCoordinate(begin_pos, 0);
+								let [right, y_1] = this.pointToCoordinate(end_pos, 0);
+								let bound = {
+									'left': left,
+									'right': right,
+									'top': figure._bound_visible.top,
+									'bottom': figure._bound_visible.bottom,
+								};
+								let data = figure._data['data'][i];
+								figure.addElement(new BarChartFragment(bound, data, legend_bits));
+							}
+						} else {
+							let unit = this._height / interval;
+							figure._element_width = unit;
+							for (let i = 0; i < interval; i++) {
+								begin_pos = i * unit;
+								end_pos = (i + 1) * unit;
+								let [x_0, bottom] = this.pointToCoordinate(0, begin_pos);
+								let [x_1, top] = this.pointToCoordinate(0, end_pos);
+								let bound = {
+									'left': figure._bound_visible.left,
+									'right': figure._bound_visible.right,
+									'top': top,
+									'bottom': bottom,
+								};
+								figure.addElement(new BarChartFragment(bound, figure._data['data'][i], legend_bits));
+							}
+						}
+					}
+					let span = figure._data.span;
+					let element_width = figure._element_width - (1 + figure._data.series) * span;
+					for (let i = 0; i < figure._elements.length; i++) {
+						for (let j = 0; j < figure._data.series; j++) {
+							Things[i]
+						}
+					}
+				});
+			});
 			return c;
 		},
 	},
 	stat: {
 		pie: function (container_id, dataset, width=300, height=300, title=undefined, opt={'bits': 2}) {
 			let c = createChart('pie', container_id, generatePieData(dataset), width, height, title, opt, (settings) => {
-					let options = JSON.parse(JSON.stringify(settings));
-					c._canvas.update(options);
-					if ('data' in options) {
-						options['data'] = generatePieData(options['data']);
-					}
-					options['x'] = 0;
-					options['y'] = (('title' in options) && (options['title'] != undefined)) ? 30 : 0;
-					c._figure.update(options);
-					c._figure._r = getR(c._figure._width, c._figure._height, c._canvas.getTextWidth('111.11%') - c._figure._gap / 2);
-					c._figure.draw();
-				}, (chart) => {
-					chart._figure.setCursor({'visible': false});
-					chart._figure._r = getR(chart._figure._width, chart._figure._height, chart._canvas.getTextWidth('111.11%') - chart._figure._gap / 2);
-					chart._figure.setDrawChart((figure) => {
-						let current_angle = 0 - Math.PI / 2, portion_angle = 0, next_angle = 0;
-						let init_element_flag = figure._elements.length > 0 ? false : true;
-						let origin = figure.getVisibleOrigin();
-						let x = origin.x, y = origin.y;
-						let legend_x = figure._gap, legend_y = figure._y0 + figure._legend_settings['gap'];
-						figure._canvas.setBrush({'font': figure._legend_settings['font']});
-						let legend_bits = figure._legend_settings['bits'];
-						for (let i = 0; i < figure._data['percentages'].length; i++) {
-							figure._ctx.beginPath();
-							if (init_element_flag) {
-						        portion_angle = figure._data['percentages'][i] * 2 * Math.PI;
-						        next_angle = current_angle + portion_angle;
-						        figure.addElement(new PieChartFragment(x, y, figure._r, current_angle * 180 / Math.PI, next_angle * 180 / Math.PI, figure._data['data'][i]['label'], figure._data['data'][i]['data'], legend_bits));
-						    } else {
-						    	next_angle = figure._elements[i]._end_angel * Math.PI / 180;
-						    }
-						    let label_x = Math.round(Math.cos((next_angle + current_angle) / 2) * (figure._r + 5));
-					        let label_y = Math.round(Math.sin((next_angle + current_angle) / 2) * (figure._r + 5));
-					        let percent = (figure._data['percentages'][i]*100).toFixed(legend_bits) + '%';
-					        label_x = label_x > 0 ? label_x + x : label_x + x - figure._canvas.getTextWidth(percent) ;
-					        label_y = label_x > 0 ? label_y + y - figure._canvas._fontsize: label_y + y;
-						    figure._ctx.arc(x, y, figure._r, current_angle, next_angle);
-					        figure._ctx.lineTo(x, y);
-					        figure._ctx.closePath();
-					        current_angle = next_angle;
-					        let legend_color = figure._data['data'][i]['color'];
-					        figure._ctx.fillStyle = changeLuminance(legend_color);
-					        figure._ctx.fill();
-					        figure._canvas.text(percent, label_x, label_y, false, true, {'color': 'black'});
-					        figure._canvas.setBrush({'color': '#fff', 'weight': 2});
-					        figure._ctx.stroke();
-					        let text_width = figure._canvas.text(figure._elements[i].legend, legend_x, legend_y, false, true, {'color': legend_color});
-					        legend_x = legend_x + text_width + figure._legend_settings['span'];
+				let options = JSON.parse(JSON.stringify(settings));
+				c._canvas.update(options);
+				if ('data' in options) {
+					options['data'] = generatePieData(options['data']);
+				}
+				options['x'] = 0;
+				options['y'] = (('title' in options) && (options['title'] != undefined)) ? 30 : 0;
+				c._figure.update(options);
+				c._figure._r = getR(c._figure._width, c._figure._height, c._canvas.getTextWidth('111.11%') - c._figure._gap / 2);
+				c._figure.draw();
+			}, (chart) => {
+				chart._figure.setCursor({'visible': false});
+				chart._figure._r = getR(chart._figure._width, chart._figure._height, chart._canvas.getTextWidth('111.11%') - chart._figure._gap / 2);
+				chart._figure.setDrawChart((figure) => {
+					let current_angle = 0 - Math.PI / 2, portion_angle = 0, next_angle = 0;
+					let init_element_flag = figure._elements.length > 0 ? false : true;
+					let origin = figure.getVisibleOrigin();
+					let x = origin.x, y = origin.y;
+					let legend_x = figure._gap, legend_y = figure._y0 + figure._legend_settings['gap'];
+					figure._canvas.setBrush({'font': figure._legend_settings['font']});
+					let legend_bits = figure._legend_settings['bits'];
+					for (let i = 0; i < figure._data['percentages'].length; i++) {
+						figure._ctx.beginPath();
+						if (init_element_flag) {
+					        portion_angle = figure._data['percentages'][i] * 2 * Math.PI;
+					        next_angle = current_angle + portion_angle;
+					        figure.addElement(new PieChartFragment(x, y, figure._r, current_angle * 180 / Math.PI, next_angle * 180 / Math.PI, figure._data['data'][i]['label'], figure._data['data'][i]['data'], legend_bits));
+					    } else {
+					    	next_angle = figure._elements[i]._end_angel * Math.PI / 180;
 					    }
-					});
+					    let label_x = Math.round(Math.cos((next_angle + current_angle) / 2) * (figure._r + 5));
+				        let label_y = Math.round(Math.sin((next_angle + current_angle) / 2) * (figure._r + 5));
+				        let percent = (figure._data['percentages'][i]*100).toFixed(legend_bits) + '%';
+				        label_x = label_x > 0 ? label_x + x : label_x + x - figure._canvas.getTextWidth(percent) ;
+				        label_y = label_x > 0 ? label_y + y - figure._canvas._fontsize: label_y + y;
+					    figure._ctx.arc(x, y, figure._r, current_angle, next_angle);
+				        figure._ctx.lineTo(x, y);
+				        figure._ctx.closePath();
+				        current_angle = next_angle;
+				        let legend_color = figure._data['data'][i]['color'];
+				        figure._ctx.fillStyle = changeLuminance(legend_color);
+				        figure._ctx.fill();
+				        figure._canvas.text(percent, label_x, label_y, false, true, {'color': 'black'});
+				        figure._canvas.setBrush({'color': '#fff', 'weight': 2});
+				        figure._ctx.stroke();
+				        let text_width = figure._canvas.text(figure._elements[i].legend, legend_x, legend_y, false, true, {'color': legend_color});
+				        legend_x = legend_x + text_width + figure._legend_settings['span'];
+				    }
 				});
+			});
 			return c;
 		},
 	}
